@@ -1,154 +1,179 @@
-import React, { useState } from 'react';
-import { Box, Typography, Button, Paper, LinearProgress, List, ListItem, ListItemText, AppBar, Toolbar } from '@mui/material';
-import { CloudUpload, Chat, Logout } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import api from '../api';
+import React, { useState, useCallback } from 'react';
+import {
+  Box,
+  Button,
+  Typography,
+  Paper,
+  Container,
+  Alert,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  IconButton,
+} from '@mui/material';
+import {
+  CloudUpload,
+  InsertDriveFile,
+  Delete,
+  CheckCircle,
+  Error,
+} from '@mui/icons-material';
+import { useDropzone } from 'react-dropzone';
+import { fileAPI } from '../api/api';
 
 interface UploadedFile {
-  filename: string;
-  file_id: string;
-  extracted_text: string;
+  id: string;
+  name: string;
+  status: 'uploading' | 'success' | 'error';
+  error?: string;
 }
 
 const FileUpload: React.FC = () => {
-  const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const navigate = useNavigate();
+  const [error, setError] = useState<string>('');
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files) return;
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    setError('');
     
-    setUploading(true);
-    const newFiles: UploadedFile[] = [];
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const formData = new FormData();
-      formData.append('file', file);
+    for (const file of acceptedFiles) {
+      const fileId = Math.random().toString(36).substr(2, 9);
       
+      // Add file to list with uploading status
+      setUploadedFiles(prev => [...prev, {
+        id: fileId,
+        name: file.name,
+        status: 'uploading'
+      }]);
+
       try {
-        const response = await api.post('/files/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        newFiles.push(response.data);
-      } catch (error) {
-        console.error('Upload failed:', error);
+        await fileAPI.upload(file);
+        
+        // Update file status to success
+        setUploadedFiles(prev => prev.map(f => 
+          f.id === fileId ? { ...f, status: 'success' } : f
+        ));
+      } catch (err: any) {
+        // Update file status to error
+        setUploadedFiles(prev => prev.map(f => 
+          f.id === fileId ? { 
+            ...f, 
+            status: 'error', 
+            error: err.response?.data?.detail || 'Upload failed' 
+          } : f
+        ));
+        setError('Some files failed to upload. Please try again.');
       }
     }
-    
-    setUploadedFiles(prev => [...prev, ...newFiles]);
-    setUploading(false);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/pdf': ['.pdf'],
+      'image/*': ['.png', '.jpg', '.jpeg'],
+      'text/plain': ['.txt'],
+    },
+    multiple: true,
+  });
+
+  const removeFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    handleFileUpload(e.dataTransfer.files);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'uploading':
+        return <LinearProgress sx={{ width: 20, height: 20 }} />;
+      case 'success':
+        return <CheckCircle color="success" />;
+      case 'error':
+        return <Error color="error" />;
+      default:
+        return <InsertDriveFile />;
+    }
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            🤖 Aiqa
-          </Typography>
-          <Button color="inherit" startIcon={<Chat />} onClick={() => navigate('/chat')}>
-            Chat
-          </Button>
-          <Button color="inherit" startIcon={<Logout />} onClick={handleLogout}>
-            Logout
-          </Button>
-        </Toolbar>
-      </AppBar>
+    <Container maxWidth="md">
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Upload Files
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Upload PDFs, images, or text files to ask questions about their content
+        </Typography>
 
-      <Box maxWidth={800} mx="auto" mt={4} p={2}>
-        <Typography variant="h4" mb={3}>Upload Files</Typography>
-        
-        <Paper
-          sx={{
-            p: 3,
-            textAlign: 'center',
-            border: '2px dashed #ccc',
-            mb: 3
-          }}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-        >
-          <CloudUpload sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
-          <Typography variant="h6" mb={2}>
-            Drag and drop files here or click to select
-          </Typography>
-          <Typography variant="body2" color="textSecondary" mb={2}>
-            Supported formats: PDF, PNG, JPG, JPEG, TXT
-          </Typography>
-          <Button
-            variant="contained"
-            component="label"
-            disabled={uploading}
-          >
-            Select Files
-            <input
-              type="file"
-              multiple
-              accept=".pdf,.png,.jpg,.jpeg,.txt"
-              style={{ display: 'none' }}
-              onChange={(e) => handleFileUpload(e.target.files)}
-            />
-          </Button>
-        </Paper>
-
-        {uploading && (
-          <Box mb={3}>
-            <Typography variant="body2" mb={1}>Uploading...</Typography>
-            <LinearProgress />
-          </Box>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
         )}
 
+        <Paper
+          {...getRootProps()}
+          sx={{
+            border: '2px dashed',
+            borderColor: isDragActive ? 'primary.main' : 'grey.300',
+            borderRadius: 2,
+            p: 4,
+            textAlign: 'center',
+            cursor: 'pointer',
+            backgroundColor: isDragActive ? 'action.hover' : 'background.paper',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              borderColor: 'primary.main',
+              backgroundColor: 'action.hover',
+            },
+          }}
+        >
+          <input {...getInputProps()} />
+          <CloudUpload sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+          <Typography variant="h6" gutterBottom>
+            {isDragActive ? 'Drop files here' : 'Drag & drop files here'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            or click to select files
+          </Typography>
+          <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+            Supported formats: PDF, PNG, JPG, JPEG, TXT
+          </Typography>
+        </Paper>
+
         {uploadedFiles.length > 0 && (
-          <Box>
-            <Typography variant="h6" mb={2}>Uploaded Files</Typography>
+          <Paper sx={{ mt: 3, p: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Uploaded Files
+            </Typography>
             <List>
-              {uploadedFiles.map((file, index) => (
-                <ListItem key={index} divider>
+              {uploadedFiles.map((file) => (
+                <ListItem
+                  key={file.id}
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      onClick={() => removeFile(file.id)}
+                      disabled={file.status === 'uploading'}
+                    >
+                      <Delete />
+                    </IconButton>
+                  }
+                >
+                  <ListItemIcon>
+                    {getStatusIcon(file.status)}
+                  </ListItemIcon>
                   <ListItemText
-                    primary={file.filename}
-                    secondary={
-                      <Box>
-                        <Typography variant="body2" color="textSecondary">
-                          File ID: {file.file_id}
-                        </Typography>
-                        {file.extracted_text && (
-                          <Typography variant="body2" sx={{ mt: 1 }}>
-                            Extracted Text: {file.extracted_text}
-                          </Typography>
-                        )}
-                      </Box>
-                    }
+                    primary={file.name}
+                    secondary={file.error || (file.status === 'success' ? 'Upload successful' : 'Uploading...')}
                   />
                 </ListItem>
               ))}
             </List>
-            <Button
-              variant="contained"
-              startIcon={<Chat />}
-              onClick={() => navigate('/chat')}
-              sx={{ mt: 2 }}
-            >
-              Start Chatting
-            </Button>
-          </Box>
+          </Paper>
         )}
       </Box>
-    </Box>
+    </Container>
   );
 };
 
