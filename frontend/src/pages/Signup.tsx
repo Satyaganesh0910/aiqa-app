@@ -35,6 +35,7 @@ interface SignupProps {
 
 const Signup: React.FC<SignupProps> = ({ onSignupSuccess, onSwitchToLogin }) => {
   const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
 
   const formik = useFormik({
     initialValues: {
@@ -46,10 +47,19 @@ const Signup: React.FC<SignupProps> = ({ onSignupSuccess, onSwitchToLogin }) => 
     onSubmit: async (values) => {
       try {
         setError('');
-        await authAPI.signup(values.email, values.password);
+        setSuccess('');
+        const result = await authAPI.signup(values.email, values.password);
+        console.log('Signup success:', result);
+        setSuccess('Account created successfully. You can sign in now.');
         onSignupSuccess();
       } catch (err: any) {
-        setError(err.response?.data?.detail || 'Signup failed. Please try again.');
+        console.error('Signup error:', err);
+        const detail = err?.response?.data?.detail;
+        setError(
+          (typeof detail === 'string' ? detail : undefined) ||
+          (Array.isArray(detail) ? detail.map((d: any) => d?.msg).filter(Boolean).join(', ') : undefined) ||
+          'Signup failed. Please try again.'
+        );
       }
     },
   });
@@ -78,6 +88,12 @@ const Signup: React.FC<SignupProps> = ({ onSignupSuccess, onSwitchToLogin }) => 
             Create Account
           </Typography>
           
+          {success && (
+            <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
+              {success}
+            </Alert>
+          )}
+
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
               {error}
