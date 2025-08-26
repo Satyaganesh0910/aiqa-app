@@ -51,7 +51,10 @@ const Signup: React.FC<SignupProps> = ({ onSignupSuccess, onSwitchToLogin }) => 
         const result = await authAPI.signup(values.email, values.password);
         console.log('Signup success:', result);
         setSuccess('Account created successfully. You can sign in now.');
-        onSignupSuccess();
+        // Wait briefly so the user sees the success message, then switch to Sign In
+        setTimeout(() => {
+          onSignupSuccess();
+        }, 1200);
       } catch (err: any) {
         console.error('Signup error:', err);
         const detail = err?.response?.data?.detail;
