@@ -21,12 +21,19 @@ api.interceptors.request.use((config) => {
 // Auth API
 export const authAPI = {
   signup: async (email: string, password: string) => {
-    const response = await api.post('/auth/signup', { email, password });
+    // Backend requires username, email, password. Use email as username for simplicity.
+    const response = await api.post('/auth/signup', { username: email, email, password });
     return response.data;
   },
   
   login: async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
+    // Backend expects OAuth2PasswordRequestForm (form-encoded) with fields: username, password
+    const form = new URLSearchParams();
+    form.append('username', email);
+    form.append('password', password);
+    const response = await api.post('/auth/login', form, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
     return response.data;
   },
 };
